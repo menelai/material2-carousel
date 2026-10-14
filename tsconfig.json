@@ -1,32 +1,30 @@
 {
   "compileOnSave": false,
   "compilerOptions": {
-    "baseUrl": "./",
-    "outDir": "./dist/out-tsc",
-    "sourceMap": true,
-    "declaration": false,
-    "module": "es2015",
-    "moduleResolution": "node",
-    "emitDecoratorMetadata": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
     "experimentalDecorators": true,
-    "noUnusedLocals": true,
-    "target": "es5",
-    "typeRoots": ["node_modules/@types"],
-    "lib": ["es2018", "dom"],
+    "importHelpers": true,
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "dom"],
+    "outDir": "./dist/out-tsc",
     "paths": {
-      "@nunomeirelesjumia/material-carousel": ["dist/carousel"],
-      "@nunomeirelesjumia/material-carousel/*": ["dist/carousel/*"]
-    },
-    "plugins": [
-      { "name": "@angular/language-service" }
-    ]
+      "@kovalenko/material-carousel": ["./dist/carousel"],
+      "@kovalenko/material-carousel/*": ["./dist/carousel/*"]
+    }
   },
   "angularCompilerOptions": {
-    "fullTemplateTypeCheck": true,
+    "enableI18nLegacyMessageIdFormat": false,
     "strictInjectionParameters": true,
-    "skipTemplateCodegen": true,
-    "strictMetadataEmit": true,
-    // "enableResourceInlining": true,
-    "enableIvy": false
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true
   }
 }

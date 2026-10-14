@@ -1,35 +1,44 @@
 import { ListKeyManagerOption } from '@angular/cdk/a11y';
 import {
-    Component,
-    Input,
-    OnInit,
-    TemplateRef,
-    ViewChild
+  Component,
+  computed,
+  inject,
+  input,
+  model,
+  TemplateRef,
+  viewChild,
 } from '@angular/core';
 import { DomSanitizer, SafeStyle } from '@angular/platform-browser';
 
-import { MatCarouselSlide } from './carousel-slide';
-
 @Component({
-    selector: 'mat-carousel-slide',
-    templateUrl: './carousel-slide.component.html',
-    styleUrls: ['./carousel-slide.component.scss']
+  selector: 'mat-carousel-slide',
+  templateUrl: './carousel-slide.component.html',
+  styleUrls: ['./carousel-slide.component.scss'],
+  standalone: true,
 })
-export class MatCarouselSlideComponent
-implements ListKeyManagerOption, MatCarouselSlide, OnInit {
-  @Input() public image: SafeStyle;
-  @Input() public overlayColor = '#00000040';
-  @Input() public hideOverlay = false;
-  @Input() public disabled = false; // implements ListKeyManagerOption
+export class MatCarouselSlideComponent implements ListKeyManagerOption {
+  readonly image = input<string>();
 
-  @ViewChild(TemplateRef) public templateRef: TemplateRef<any>;
+  readonly overlayColor = input('#00000040');
 
-  constructor(public sanitizer: DomSanitizer) {
+  readonly hideOverlay = input(false);
+
+  readonly disabledInput = model(false, { alias: 'disabled' });
+
+  readonly templateRef = viewChild.required(TemplateRef);
+
+  private readonly sanitizer = inject(DomSanitizer);
+
+  readonly backgroundImage = computed<SafeStyle | null>(() => {
+    const image = this.image();
+    return image ? this.sanitizer.bypassSecurityTrustStyle(`url('${image}')`) : null;
+  });
+
+  get disabled(): boolean {
+    return this.disabledInput();
   }
 
-  public ngOnInit(): void {
-      if (this.image) {
-          this.image = this.sanitizer.bypassSecurityTrustStyle(`url('${this.image}')`);
-      }
+  set disabled(value: boolean) {
+    this.disabledInput.set(value);
   }
 }

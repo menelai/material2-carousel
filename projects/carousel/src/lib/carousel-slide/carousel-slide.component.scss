@@ -1,4 +1,4 @@
-@import "mixins";
+@use "mixins" as *;
 
 .carousel-slide {
   @include frame();

@@ -1,413 +1,417 @@
-/* eslint-disable */
-
-import { animate, style, AnimationBuilder } from "@angular/animations";
-import { ListKeyManager } from "@angular/cdk/a11y";
-import { isPlatformBrowser } from "@angular/common";
+import { ListKeyManager } from '@angular/cdk/a11y';
+import { isPlatformBrowser, NgTemplateOutlet } from '@angular/common';
 import {
-    AfterContentInit,
-    AfterViewInit,
-    Component,
-    ContentChildren,
-    ElementRef,
-    EventEmitter,
-    HostListener,
-    Inject,
-    Input,
-    OnDestroy,
-    Output,
-    PLATFORM_ID,
-    QueryList,
-    Renderer2,
-    ViewChild
-} from "@angular/core";
-import { ThemePalette } from "@angular/material/core";
-import { interval, BehaviorSubject, Observable, Subject } from "rxjs";
-import { filter, takeUntil } from "rxjs/operators";
+  AfterContentInit,
+  Component,
+  computed,
+  contentChildren,
+  DestroyRef,
+  effect,
+  ElementRef,
+  HostListener,
+  inject,
+  Injector,
+  input,
+  output,
+  PLATFORM_ID,
+  Renderer2,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { MatIconButton, MatMiniFabButton } from '@angular/material/button';
+import { ThemePalette } from '@angular/material/core';
+import { MatIcon } from '@angular/material/icon';
+import { interval, Observable, Subject } from 'rxjs';
+import { filter, takeUntil } from 'rxjs/operators';
 
-import { MatCarousel, Orientation, SvgIconOverrides } from "./carousel";
-import { MatCarouselSlideComponent } from "./carousel-slide/carousel-slide.component";
+import { Orientation, SvgIconOverrides } from './carousel';
+import { MatCarouselSlideComponent } from './carousel-slide/carousel-slide.component';
 
 enum Direction {
   Left,
   Right,
-  Index
+  Index,
 }
 
 @Component({
-    selector: "mat-carousel",
-    templateUrl: "./carousel.component.html",
-    styleUrls: ["./carousel.component.scss"]
+  selector: 'mat-carousel',
+  templateUrl: './carousel.component.html',
+  styleUrls: ['./carousel.component.scss'],
+  standalone: true,
+  imports: [MatIconButton, MatMiniFabButton, MatIcon, NgTemplateOutlet],
 })
-export class MatCarouselComponent
-implements AfterContentInit, AfterViewInit, MatCarousel, OnDestroy {
-  @Input() public timings = "250ms ease-in";
-  @Input() public svgIconOverrides: SvgIconOverrides;
+export class MatCarouselComponent implements AfterContentInit {
+  // Animations.
+  readonly timings = input('250ms ease-in');
+  readonly svgIconOverrides = input<SvgIconOverrides>();
 
-  @Input()
-  public set autoplay(value: boolean) {
-      this.autoplay$.next(value);
-      this._autoplay = value;
+  // Navigation.
+  readonly autoplay = input(true);
+  readonly interval = input(5000);
+  readonly loop = input(true);
+  readonly hideArrows = input(true);
+  readonly hideIndicators = input(true);
+  readonly pauseOnHover = input(true);
+
+  // Appearance.
+  readonly color = input<ThemePalette>('accent');
+  readonly maxWidth = input('auto');
+  readonly maintainAspectRatio = input(true);
+  readonly proportion = input(25);
+  readonly slideHeight = input('100%');
+  readonly slides = input<number>();
+
+  // Accessibility.
+  readonly useKeyboard = input(false);
+  readonly useMouseWheel = input(false);
+  readonly orientation = input<Orientation>('ltr');
+
+  readonly animationStart = output<number>();
+  readonly change = output<number>();
+
+  readonly currentIndex = signal(0);
+
+  readonly slidesList = contentChildren(MatCarouselSlideComponent);
+
+  readonly visibleSlides = computed(() => {
+    const slides = this.slides();
+    const list = this.slidesList();
+    return slides != null && slides < list.length ? list.slice(0, slides) : list;
+  });
+
+  readonly carouselContainerRef = viewChild.required<ElementRef<HTMLDivElement>>(
+    'carouselContainer'
+  );
+  readonly carouselListRef = viewChild.required<ElementRef<HTMLElement>>('carouselList');
+
+  readonly translation = signal('translateX(0px)');
+
+  private listKeyManager!: ListKeyManager<MatCarouselSlideComponent>;
+  private timer$!: Observable<number>;
+  private readonly timerStop$ = new Subject<void>();
+  private animationPending = false;
+  private animationTimeout: ReturnType<typeof setTimeout> | null = null;
+  private pressed = false;
+  private dragging = false;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private readonly dragThreshold = 12;
+
+  private readonly renderer = inject(Renderer2);
+  private readonly platformId = inject(PLATFORM_ID);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+
+  get currentSlide(): MatCarouselSlideComponent | null {
+    return this.listKeyManager?.activeItem ?? null;
   }
 
-  @Input()
-  public set interval(value: number) {
-      this.interval$.next(value);
-  }
+  constructor() {
+    effect(() => {
+      const loop = this.loop();
+      this.listKeyManager?.withWrap(loop);
+    });
 
-  public get loop(): boolean {
-      return this._loop;
-  }
-  @Input()
-  public set loop(value: boolean) {
-      this.loop$.next(value);
-      this._loop = value;
-  }
+    effect(() => {
+      const orientation = this.orientation();
+      this.listKeyManager?.withHorizontalOrientation(orientation);
+    });
 
-  @Input() public hideArrows = true;
-  @Input() public hideIndicators = true;
-  @Input() public pauseOnHover = true;
-  @Input() public color: ThemePalette = "accent";
-
-  public get maxWidth(): string {
-      return this._maxWidth;
-  }
-  @Input()
-  public set maxWidth(value: string) {
-      this._maxWidth = value;
-      this.maxWidth$.next(value);
-  }
-
-  @Input() public maintainAspectRatio = true;
-  @Input() public proportion = 25;
-  @Input() public slideHeight = "100%";
-
-  @Input()
-  public set slides(value: number) {
-      this.slides$.next(value);
-  }
-
-  @Input() public useKeyboard = false;
-  @Input() public useMouseWheel = false;
-
-  public get orientation(): Orientation {
-      return this._orientation;
-  }
-  @Input()
-  public set orientation(value: Orientation) {
-      this.orientation$.next(value);
-      this._orientation = value;
-  }
-
-  @Output()
-  public animationStart: EventEmitter<number> = new EventEmitter<number>();
-
-  @Output()
-  public change: EventEmitter<number> = new EventEmitter<number>();
-
-  public get currentIndex(): number {
-      if (this.listKeyManager) {
-          return this.listKeyManager.activeItemIndex;
-      }
-
-      return 0;
-  }
-  public get currentSlide(): MatCarouselSlideComponent {
-      if (this.listKeyManager) {
-          return this.listKeyManager.activeItem;
-      }
-
-      return null;
-  }
-
-  @ContentChildren(MatCarouselSlideComponent) public slidesList: QueryList<
-    MatCarouselSlideComponent
-  >;
-  @ViewChild("carouselContainer") private carouselContainer: ElementRef<
-    HTMLDivElement
-  >;
-  @ViewChild("carouselList") private carouselList: ElementRef<HTMLElement>;
-  public listKeyManager: ListKeyManager<MatCarouselSlideComponent>;
-
-  private _autoplay = true;
-  private autoplay$ = new Subject<boolean>();
-
-  private interval$ = new BehaviorSubject<number>(5000);
-  private slides$ = new BehaviorSubject<number>(null);
-
-  private _maxWidth = "auto";
-  private maxWidth$ = new Subject<any>();
-
-  private _loop = true;
-  private loop$ = new Subject<boolean>();
-
-  private _orientation: Orientation = "ltr";
-  private orientation$ = new Subject<Orientation>();
-
-  private timer$: Observable<number>;
-  private timerStop$ = new Subject<any>();
-
-  private destroy$ = new Subject<any>();
-  private playing = false;
-
-  constructor(
-    private animationBuilder: AnimationBuilder,
-    private renderer: Renderer2,
-    @Inject(PLATFORM_ID) private platformId
-  ) {}
-
-  public ngAfterContentInit(): void {
-      this.listKeyManager = new ListKeyManager(this.slidesList)
-          .withVerticalOrientation(false)
-          .withHorizontalOrientation(this._orientation)
-          .withWrap(this._loop);
-
-      this.listKeyManager.updateActiveItem(0);
-      this.listKeyManager.change
-          .pipe(takeUntil(this.destroy$))
-          .subscribe(() => this.playAnimation());
-  }
-
-  public ngAfterViewInit(): void {
-      this.autoplay$.pipe(takeUntil(this.destroy$)).subscribe(value => {
-          this.stopTimer();
-          this.startTimer(value);
-      });
-
-      this.interval$.pipe(takeUntil(this.destroy$)).subscribe(value => {
-          this.stopTimer();
-          this.resetTimer(value);
-          this.startTimer(this._autoplay);
-      });
-
-      this.maxWidth$
-          .pipe(takeUntil(this.destroy$))
-          .subscribe(() => this.slideTo(0));
-
-      this.loop$
-          .pipe(takeUntil(this.destroy$))
-          .subscribe(value => this.listKeyManager.withWrap(value));
-
-      this.orientation$
-          .pipe(takeUntil(this.destroy$))
-          .subscribe(value => this.listKeyManager.withHorizontalOrientation(value));
-
-      this.slides$
-          .pipe(
-              takeUntil(this.destroy$),
-              filter(value => value && value < this.slidesList.length)
-          )
-          .subscribe(value => this.resetSlides(value));
-  }
-
-  public ngOnDestroy(): void {
-      this.destroy$.next('');
-      this.destroy$.complete();
-  }
-
-  public next(): void {
-      this.goto(Direction.Right);
-  }
-
-  public previous(): void {
-      this.goto(Direction.Left);
-  }
-
-  public slideTo(index: number): void {
-      this.goto(Direction.Index, index);
-  }
-
-  @HostListener("keyup", ["$event"])
-  public onKeyUp(event: KeyboardEvent): void {
-      if (this.useKeyboard && !this.playing) {
-          this.listKeyManager.onKeydown(event);
-      }
-  }
-
-  @HostListener("mouseenter")
-  public onMouseEnter(): void {
-      if (this.pauseOnHover) {
-          this.stopTimer();
-      }
-  }
-
-  @HostListener("mouseleave")
-  public onMouseLeave(): void {
-      if (this.pauseOnHover) {
-          this.startTimer(this._autoplay);
-      }
-  }
-
-  @HostListener("mousewheel", ["$event"])
-  public onMouseWheel(event: any): void {
-      if (this.useMouseWheel) {
-          event.preventDefault(); // prevent window to scroll
-          const Δ = Math.sign(event.deltaY);
-
-          if (Δ > 0) {
-              this.next();
-          } else if (Δ < 0) {
-              this.previous();
-          }
-      }
-  }
-
-  @HostListener("window:resize", ["$event"])
-  public onResize(event: Event): void {
-      // Reset carousel when window is resized
-      // in order to avoid major glitches.
+    effect(() => {
+      this.maxWidth();
       this.slideTo(0);
+    });
+
+    effect(() => {
+      this.interval();
+      this.autoplay();
+      this.stopTimer();
+      this.startTimer();
+    });
+
+    this.destroyRef.onDestroy(() => {
+      this.clearAnimationTimeout();
+      this.listKeyManager?.destroy();
+    });
   }
 
-  public onPan(event: any, slideElem: HTMLElement): void {
-      // https://github.com/angular/angular/issues/10541#issuecomment-346539242
-      // if y velocity is greater, it"s a panup/pandown, so ignore.
-      if (Math.abs(event.velocityY) > Math.abs(event.velocityX)) {
-          return;
-      }
-      let Δx = event.deltaX;
-      if (this.isOutOfBounds()) {
-          Δx *= 0.2; // decelerate movement;
-      }
+  ngAfterContentInit(): void {
+    this.listKeyManager = new ListKeyManager(this.visibleSlides, this.injector)
+      .withVerticalOrientation(false)
+      .withHorizontalOrientation(this.orientation())
+      .withWrap(this.loop());
 
-      this.renderer.setStyle(slideElem, "cursor", "grabbing");
-      this.renderer.setStyle(
-          this.carouselList.nativeElement,
-          "transform",
-          this.getTranslation(this.getOffset() + Δx)
-      );
+    this.listKeyManager.updateActiveItem(0);
+
+    this.listKeyManager.change
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(index => {
+        this.currentIndex.set(index);
+        this.playAnimation();
+      });
   }
 
-  public onPanEnd(event: any, slideElem: HTMLElement): void {
-      this.renderer.removeStyle(slideElem, "cursor");
+  next(): void {
+    this.goto(Direction.Right);
+  }
 
-      if (
-          !this.isOutOfBounds() &&
-      Math.abs(event.deltaX) > this.getWidth() * 0.25
-      ) {
-          if (event.deltaX <= 0) {
-              this.next();
-              return;
-          }
-          this.previous();
-          return;
+  previous(): void {
+    this.goto(Direction.Left);
+  }
+
+  slideTo(index: number): void {
+    this.goto(Direction.Index, index);
+  }
+
+  @HostListener('keyup', ['$event'])
+  onKeyUp(event: KeyboardEvent): void {
+    if (this.useKeyboard()) {
+      this.listKeyManager?.onKeydown(event);
+    }
+  }
+
+  @HostListener('mouseenter')
+  onMouseEnter(): void {
+    if (this.pauseOnHover()) {
+      this.stopTimer();
+    }
+  }
+
+  @HostListener('mouseleave')
+  onMouseLeave(): void {
+    if (this.pauseOnHover()) {
+      this.startTimer();
+    }
+  }
+
+  @HostListener('mousewheel', ['$event'])
+  onMouseWheel(event: Event): void {
+    if (this.useMouseWheel()) {
+      event.preventDefault(); // prevent window to scroll
+      const delta = Math.sign((event as WheelEvent).deltaY);
+
+      if (delta > 0) {
+        this.next();
+      } else if (delta < 0) {
+        this.previous();
       }
-      this.playAnimation(); // slide back, don"t change current index
+    }
+  }
+
+  @HostListener('window:resize')
+  onResize(): void {
+    // Reset carousel when window is resized
+    // in order to avoid major glitches.
+    this.slideTo(0);
+  }
+
+  @HostListener('transitionend', ['$event'])
+  onTransitionEnd(event: TransitionEvent): void {
+    if (
+      event.target === this.carouselListRef().nativeElement &&
+      event.propertyName === 'transform'
+    ) {
+      this.finishAnimation();
+    }
+  }
+
+  onDragStart(event: PointerEvent): void {
+    if (event.pointerType === 'mouse' && event.button !== 0) {
+      return; // only react to the primary button
+    }
+    this.pressed = true;
+    this.dragging = false;
+    this.dragStartX = event.clientX;
+    this.dragStartY = event.clientY;
+  }
+
+  onDrag(event: PointerEvent, slideElem: HTMLElement): void {
+    if (!this.pressed) {
+      return;
+    }
+
+    const deltaX = event.clientX - this.dragStartX;
+    const deltaY = event.clientY - this.dragStartY;
+
+    // Begin the drag (and capture the pointer) only once the pointer has moved
+    // beyond the threshold, otherwise pointerdown/up on nested elements would
+    // swallow their click events.
+    if (!this.dragging) {
+      const isHorizontalDrag =
+        Math.abs(deltaX) > this.dragThreshold && Math.abs(deltaX) > Math.abs(deltaY);
+      if (!isHorizontalDrag) {
+        return;
+      }
+      this.dragging = true;
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    }
+
+    // If the vertical drag is greater, it's a drag up/down, so ignore.
+    if (Math.abs(deltaY) > Math.abs(deltaX)) {
+      return;
+    }
+
+    let adjustedDelta = deltaX;
+    if (this.isOutOfBounds()) {
+      adjustedDelta *= 0.2; // decelerate movement;
+    }
+
+    this.renderer.setStyle(slideElem, 'cursor', 'grabbing');
+    this.translation.set(this.getTranslation(this.getOffset() + adjustedDelta));
+  }
+
+  onDragEnd(event: PointerEvent, slideElem: HTMLElement): void {
+    this.pressed = false;
+    if (!this.dragging) {
+      return;
+    }
+    this.dragging = false;
+    this.renderer.removeStyle(slideElem, 'cursor');
+
+    const deltaX = event.clientX - this.dragStartX;
+
+    if (!this.isOutOfBounds() && Math.abs(deltaX) > this.getWidth() * 0.25) {
+      if (deltaX <= 0) {
+        this.next();
+        return;
+      }
+      this.previous();
+      return;
+    }
+    this.playAnimation(); // slide back, don't change current index
   }
 
   private isOutOfBounds(): boolean {
-      const sign = this.orientation === "rtl" ? -1 : 1;
-      const left =
-      sign *
-      (this.carouselList.nativeElement.getBoundingClientRect().left -
-        this.carouselList.nativeElement.offsetParent.getBoundingClientRect()
-            .left);
-      const lastIndex = this.slidesList.length - 1;
-      const width = -this.getWidth() * lastIndex;
+    const sign = this.orientation() === 'rtl' ? -1 : 1;
+    const listEl = this.carouselListRef().nativeElement;
+    const offsetParent = listEl.offsetParent;
+    const parentLeft = offsetParent ? offsetParent.getBoundingClientRect().left : 0;
+    const left = sign * (listEl.getBoundingClientRect().left - parentLeft);
+    const lastIndex = this.visibleSlides().length - 1;
+    const width = -this.getWidth() * lastIndex;
 
-      return (
-          (this.listKeyManager.activeItemIndex === 0 && left >= 0) ||
+    return (
+      (this.listKeyManager.activeItemIndex === 0 && left >= 0) ||
       (this.listKeyManager.activeItemIndex === lastIndex && left <= width)
-      );
+    );
   }
 
   private isVisible(): boolean {
-      if (!isPlatformBrowser(this.platformId)) {
-          return false;
-      }
+    if (!isPlatformBrowser(this.platformId)) {
+      return false;
+    }
 
-      const elem = this.carouselContainer.nativeElement;
-      const docViewTop = window.pageYOffset;
-      const docViewBottom = docViewTop + window.innerHeight;
-      const elemOffset = elem.getBoundingClientRect();
-      const elemTop = docViewTop + elemOffset.top;
-      const elemBottom = elemTop + elemOffset.height;
+    const container = this.carouselContainerRef();
+    if (!container) {
+      return false;
+    }
 
-      return elemBottom <= docViewBottom || elemTop >= docViewTop;
+    const elem = container.nativeElement;
+    const docViewTop = window.pageYOffset;
+    const docViewBottom = docViewTop + window.innerHeight;
+    const elemOffset = elem.getBoundingClientRect();
+    const elemTop = docViewTop + elemOffset.top;
+    const elemBottom = elemTop + elemOffset.height;
+
+    return elemBottom <= docViewBottom || elemTop >= docViewTop;
   }
 
   private getOffset(): number {
-      const offset = this.listKeyManager.activeItemIndex * this.getWidth();
-      const sign = this.orientation === "rtl" ? 1 : -1;
-      return sign * offset;
+    const offset = this.currentIndex() * this.getWidth();
+    const sign = this.orientation() === 'rtl' ? 1 : -1;
+    return sign * offset;
   }
 
   private getTranslation(offset: number): string {
-      return `translateX(${offset}px)`;
+    return `translateX(${offset}px)`;
   }
 
   private getWidth(): number {
-      return this.carouselContainer.nativeElement.clientWidth;
+    return this.carouselContainerRef().nativeElement.clientWidth;
   }
 
   private goto(direction: Direction, index?: number): void {
-      if (!this.playing) {
-          const rtl = this.orientation === "rtl";
+    if (!this.listKeyManager) {
+      return;
+    }
+    const rtl = this.orientation() === 'rtl';
 
-          switch (direction) {
-          case Direction.Left:
-              return rtl
-                  ? this.listKeyManager.setNextItemActive()
-                  : this.listKeyManager.setPreviousItemActive();
-          case Direction.Right:
-              return rtl
-                  ? this.listKeyManager.setPreviousItemActive()
-                  : this.listKeyManager.setNextItemActive();
-          case Direction.Index:
-              return this.listKeyManager.setActiveItem(index);
-          }
-      }
+    switch (direction) {
+      case Direction.Left:
+        return rtl
+          ? this.listKeyManager.setNextItemActive()
+          : this.listKeyManager.setPreviousItemActive();
+      case Direction.Right:
+        return rtl
+          ? this.listKeyManager.setPreviousItemActive()
+          : this.listKeyManager.setNextItemActive();
+      case Direction.Index:
+        return this.listKeyManager.setActiveItem(index as number);
+    }
   }
 
   private playAnimation(): void {
-      const translation = this.getTranslation(this.getOffset());
-      const factory = this.animationBuilder.build(
-          animate(this.timings, style({ transform: translation }))
-      );
-      const animation = factory.create(this.carouselList.nativeElement);
+    this.translation.set(this.getTranslation(this.getOffset()));
+    this.animationStart.emit(this.currentIndex());
+    this.scheduleAnimationEnd();
+  }
 
-      animation.onStart(() => {
-          this.playing = true;
-          this.animationStart.emit(this.currentIndex);
+  private scheduleAnimationEnd(): void {
+    this.clearAnimationTimeout();
+    this.animationPending = true;
+    const duration = this.getTransitionDuration(this.timings());
+    this.animationTimeout = setTimeout(() => this.finishAnimation(), duration + 16);
+  }
+
+  private finishAnimation(): void {
+    if (!this.animationPending) {
+      return;
+    }
+    this.animationPending = false;
+    this.clearAnimationTimeout();
+    this.change.emit(this.currentIndex());
+  }
+
+  private getTransitionDuration(timings: string): number {
+    const match = timings.match(/(\d+(?:\.\d+)?)(ms|s)/);
+    if (!match) {
+      return 250;
+    }
+    const value = parseFloat(match[1]);
+    return match[2] === 's' ? value * 1000 : value;
+  }
+
+  private clearAnimationTimeout(): void {
+    if (this.animationTimeout != null) {
+      clearTimeout(this.animationTimeout);
+      this.animationTimeout = null;
+    }
+  }
+
+  private resetTimer(): void {
+    this.timer$ = interval(this.interval());
+  }
+
+  private startTimer(): void {
+    if (!this.autoplay()) {
+      return;
+    }
+
+    this.resetTimer();
+    this.timer$
+      .pipe(
+        takeUntil(this.timerStop$),
+        takeUntilDestroyed(this.destroyRef),
+        filter(() => this.isVisible())
+      )
+      .subscribe(() => {
+        this.listKeyManager?.withWrap(true).setNextItemActive();
+        this.listKeyManager?.withWrap(this.loop());
       });
-      animation.onDone(() => {
-          this.change.emit(this.currentIndex);
-          this.playing = false;
-          this.renderer.setStyle(
-              this.carouselList.nativeElement,
-              "transform",
-              translation
-          );
-          animation.destroy();
-      });
-      animation.play();
-  }
-
-  private resetSlides(slides: number): void {
-      this.slidesList.reset(this.slidesList.toArray().slice(0, slides));
-  }
-
-  private resetTimer(value: number): void {
-      this.timer$ = interval(value);
-  }
-
-  private startTimer(autoplay: boolean): void {
-      if (!autoplay) {
-          return;
-      }
-
-      this.timer$
-          .pipe(
-              takeUntil(this.timerStop$),
-              takeUntil(this.destroy$),
-              filter(() => this.isVisible())
-          )
-          .subscribe(() => {
-              this.listKeyManager.withWrap(true).setNextItemActive();
-              this.listKeyManager.withWrap(this.loop);
-          });
   }
 
   private stopTimer(): void {
-      this.timerStop$.next('');
+    this.timerStop$.next(undefined);
   }
 }

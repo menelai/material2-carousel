@@ -1,6 +1,6 @@
 <mat-toolbar>
   <div class="demo-logo">
-    <img src="../assets/Logo.png" width="60px"/>
+    <img src="../assets/Logo.png" width="60px" alt="Material carousel logo" />
     <span>material2-carousel</span>
   </div>
 
@@ -16,7 +16,7 @@
       (click)="copy()"
     >
       <mat-icon>assignment</mat-icon>
-      npm install @nunomeirelesjumia/material-carousel
+      npm install @kovalenko/material-carousel
     </button>
   </span>
 
@@ -28,13 +28,14 @@
       <a
         href="https://github.com/gabrielbusarello/material2-carousel"
         target="_blank"
+        rel="noopener"
         mat-menu-item
       >
         <mat-icon>code</mat-icon>Source code
       </a>
       <button mat-menu-item (click)="toggleTheme()">
         <mat-icon>
-          {{ darkMode ? "invert_colors_off" : "invert_colors" }}
+          {{ darkMode ? 'invert_colors_off' : 'invert_colors' }}
         </mat-icon>
         Toggle theme
       </button>
@@ -226,30 +227,38 @@
           [slideHeight]="slideHeight"
           (change)="onChange($event)"
         >
-          <mat-carousel-slide
-            #matCarouselSlide
-            *ngFor="let slide of slidesList; let i = index"
-            image="assets/demo.png"
-            [overlayColor]="overlayColor"
-            [hideOverlay]="hideOverlay"
-          >
-            <ng-container *ngIf="showContent">
-              <div
-                style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center"
-              >
-                <h1>{{ i }}</h1>
-                <p>disabled: {{ matCarouselSlide.disabled }}</p>
-                <button
-                  mat-flat-button
-                  (click)="
-                    matCarouselSlide.disabled = !matCarouselSlide.disabled
+          @for (slide of slidesList; track $index; let i = $index) {
+            <mat-carousel-slide
+              #matCarouselSlide
+              image="assets/demo.png"
+              [overlayColor]="overlayColor"
+              [hideOverlay]="hideOverlay"
+            >
+              @if (showContent) {
+                <div
+                  style="
+                    width: 100%;
+                    height: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
                   "
                 >
-                  Click me!
-                </button>
-              </div>
-            </ng-container>
-          </mat-carousel-slide>
+                  <h1>{{ i }}</h1>
+                  <p>disabled: {{ matCarouselSlide.disabled }}</p>
+                  <button
+                    mat-flat-button
+                    (click)="
+                      matCarouselSlide.disabled = !matCarouselSlide.disabled
+                    "
+                  >
+                    Click me!
+                  </button>
+                </div>
+              }
+            </mat-carousel-slide>
+          }
         </mat-carousel>
       </div>
 

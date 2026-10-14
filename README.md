@@ -1,36 +1,41 @@
 # Material Carousel
 
-[![Material2 Carousel](./projects/demo/src/assets/Biglogo.png)](https://github.com/nunomeirelesjumia/material2-carousel)
+[![Material2 Carousel](./projects/demo/src/assets/Biglogo.png)](https://github.com/menelai/material2-carousel)
 
 ## EXTRA NOTICE
-This version has been further forked to upgrade it to use Angular 17.
+This version has been upgraded to Angular 22 and rewritten with standalone components
+and signal-based inputs/outputs.
 
 ## About
 This package is a carousel component for Angular using Material Design.
 
 ### Installing
-`npm install --save @nunomeirelesjumia/material-carousel`
+`npm install --save @kovalenko/material-carousel`
 
 ### Importing
-```typescript
-//...
-import { MatCarouselModule } from '@nunomeirelesjumia/material-carousel';
+The components are standalone, so import them directly into your component (or lazy
+route/feature) instead of an `NgModule`:
 
-@NgModule({
-  // ...
-  imports: [
-    // ...
-    MatCarouselModule.forRoot(),
-    // ...
-  ]
+```typescript
+import { Component } from '@angular/core';
+import {
+  MatCarouselComponent,
+  MatCarouselSlideComponent,
+} from '@kovalenko/material-carousel';
+
+@Component({
+  selector: 'app-example',
+  standalone: true,
+  imports: [MatCarouselComponent, MatCarouselSlideComponent],
+  templateUrl: './example.component.html',
 })
-export class AppModule {}
+export class ExampleComponent {}
 ```
 
 ## Usage
 ### `MatCarouselComponent`
 ```typescript
-import { MatCarousel, MatCarouselComponent } from '@nunomeirelesjumia/material-carousel';
+import { MatCarouselComponent } from '@kovalenko/material-carousel';
 ```
 ```html
 <mat-carousel>
@@ -86,7 +91,7 @@ Play around with the [demo](https://gabrielbusarello.github.io/material2-carouse
 
 ### `MatCarouselSlideComponent`
 ```typescript
-import { MatCarouselSlide, MatCarouselSlideComponent } from '@nunomeirelesjumia/material-carousel';
+import { MatCarouselSlideComponent } from '@kovalenko/material-carousel';
 ```
 ```html
 <mat-carousel>
@@ -105,8 +110,8 @@ import { MatCarouselSlide, MatCarouselSlideComponent } from '@nunomeirelesjumia/
 
 ## Contributing
 ### How to help
-- For bugs and opinions, please [open an issue](https://github.com/nunomeirelesjumia/material2-carousel/issues/new)
-- For pushing changes, please [open a pull request](https://github.com/nunomeirelesjumia/material2-carousel/compare)
+- For bugs and opinions, please [open an issue](https://github.com/menelai/material2-carousel/issues/new)
+- For pushing changes, please [open a pull request](https://github.com/menelai/material2-carousel/compare)
 
 ### How to develop and test
 #### Testing

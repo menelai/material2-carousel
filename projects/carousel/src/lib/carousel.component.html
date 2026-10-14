@@ -2,82 +2,83 @@
   #carouselContainer
   class="carousel"
   tabindex="0"
-  [style.max-width]="maxWidth"
-  [style.height]="!maintainAspectRatio ? '100%' : 'auto'"
+  [style.max-width]="maxWidth()"
+  [style.height]="!maintainAspectRatio() ? '100%' : 'auto'"
 >
   <ul
     #carouselList
     class="carousel-list"
     role="listbox"
-    [style.flex-direction]="orientation === 'rtl' ? 'row-reverse' : 'row'"
-    [style.height]="!maintainAspectRatio ? '100%' : 'auto'"
+    [style.transform]="translation()"
+    [style.transition]="timings()"
+    [style.flex-direction]="orientation() === 'rtl' ? 'row-reverse' : 'row'"
+    [style.height]="!maintainAspectRatio() ? '100%' : 'auto'"
   >
-    <li
-      #carouselSlide
-      *ngFor="let slide of slidesList"
-      class="carousel-slide"
-      role="option"
-      [style.padding-bottom]="maintainAspectRatio && proportion ? proportion + '%': '0px'"
-      [style.height]="!maintainAspectRatio && slideHeight ? slideHeight : '0px'"
-      (panleft)="onPan($event, carouselSlide)"
-      (panright)="onPan($event, carouselSlide)"
-      (panend)="onPanEnd($event, carouselSlide)"
-      (pancancel)="onPanEnd($event, carouselSlide)"
-    >
-      <ng-container [ngTemplateOutlet]="slide.templateRef"></ng-container>
-    </li>
+    @for (slide of visibleSlides(); track slide) {
+      <li
+        #carouselSlide
+        class="carousel-slide"
+        role="option"
+        [style.padding-bottom]="maintainAspectRatio() && proportion() ? proportion() + '%' : '0px'"
+        [style.height]="!maintainAspectRatio() && slideHeight() ? slideHeight() : '0px'"
+        (pointerdown)="onDragStart($event)"
+        (pointermove)="onDrag($event, carouselSlide)"
+        (pointerup)="onDragEnd($event, carouselSlide)"
+        (pointercancel)="onDragEnd($event, carouselSlide)"
+      >
+        <ng-container [ngTemplateOutlet]="slide.templateRef()"></ng-container>
+      </li>
+    }
   </ul>
 
-  <button
-    *ngIf="!hideArrows"
-    mat-icon-button
-    type="button"
-    tabindex="-1"
-    [color]="color"
-    [disabled]="!loop && currentIndex === 0"
-    (click)="previous()"
-  >
-    <mat-icon
-      *ngIf="svgIconOverrides?.arrowBack; else: defaultArrowBack"
-      [svgIcon]="svgIconOverrides.arrowBack"
-    ></mat-icon>
-    <ng-template #defaultArrowBack>
-      <mat-icon>arrow_back</mat-icon>
-    </ng-template>
-  </button>
-  <button
-    *ngIf="!hideArrows"
-    mat-icon-button
-    type="button"
-    tabindex="-1"
-    [color]="color"
-    [disabled]="!loop && currentIndex === slidesList.length - 1"
-    (click)="next()"
-  >
-    <mat-icon
-      *ngIf="svgIconOverrides?.arrowForward; else: defaultArrowForward"
-      [svgIcon]="svgIconOverrides.arrowForward"
-    ></mat-icon>
-    <ng-template #defaultArrowForward>
-      <mat-icon>arrow_forward</mat-icon>
-    </ng-template>
-  </button>
-
-  <div
-    *ngIf="!hideIndicators"
-    class="carousel-indicators"
-    tabindex="-1"
-    [style.flex-direction]="orientation === 'rtl' ? 'row-reverse' : 'row'"
-  >
+  @if (!hideArrows()) {
     <button
-      *ngFor="let slide of slidesList; let i = index"
+      mat-icon-button
       type="button"
       tabindex="-1"
-      mat-mini-fab
-      [color]="color"
-      [disabled]="i === currentIndex"
-      (click)="slideTo(i)"
-      (focus)="carouselContainer.focus()"
-    ></button>
-  </div>
+      [color]="color()"
+      [disabled]="!loop() && currentIndex() === 0"
+      (click)="previous()"
+    >
+      @if (svgIconOverrides()?.arrowBack; as arrowBack) {
+        <mat-icon [svgIcon]="arrowBack"></mat-icon>
+      } @else {
+        <mat-icon>arrow_back</mat-icon>
+      }
+    </button>
+    <button
+      mat-icon-button
+      type="button"
+      tabindex="-1"
+      [color]="color()"
+      [disabled]="!loop() && currentIndex() === visibleSlides().length - 1"
+      (click)="next()"
+    >
+      @if (svgIconOverrides()?.arrowForward; as arrowForward) {
+        <mat-icon [svgIcon]="arrowForward"></mat-icon>
+      } @else {
+        <mat-icon>arrow_forward</mat-icon>
+      }
+    </button>
+  }
+
+  @if (!hideIndicators()) {
+    <div
+      class="carousel-indicators"
+      tabindex="-1"
+      [style.flex-direction]="orientation() === 'rtl' ? 'row-reverse' : 'row'"
+    >
+      @for (slide of visibleSlides(); track slide; let i = $index) {
+        <button
+          type="button"
+          tabindex="-1"
+          mat-mini-fab
+          [color]="color()"
+          [disabled]="i === currentIndex()"
+          (click)="slideTo(i)"
+          (focus)="carouselContainer.focus()"
+        ></button>
+      }
+    </div>
+  }
 </div>
